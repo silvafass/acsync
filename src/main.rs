@@ -1,7 +1,10 @@
+use acsync::CustomError;
+use acsync::fs::FileSearcher;
 use acsync::{
     cli_helper::{self, Arg, ArgsParser},
     create_args_parser,
 };
+use std::time::Instant;
 
 create_args_parser! {
     @attr #[derive(Debug)]
@@ -29,14 +32,16 @@ create_args_parser! {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let now = Instant::now();
+
     let command = Command::parse();
 
     if command.debug() {
         dbg!(&command);
     }
 
-    match &command {
+    let result = match &command {
         Command::Replicate {
             origin,
             destination,
@@ -45,8 +50,9 @@ fn main() {
             ..
         } => {
             if let (None, ..) | (.., None) = (origin, destination) {
-                eprintln!("ERROR: Origin and destination arguments must be informed!");
-                std::process::exit(1);
+                Err(CustomError::InvalidInput(
+                    "Origin and destination arguments must be informed!",
+                ))?;
             }
 
             if back.unwrap_or_default() {
@@ -55,6 +61,18 @@ fn main() {
             if dryrun.unwrap_or_default() {
                 println!("Dry run mode...");
             }
+
+            let paths_iter = FileSearcher::new(origin.as_ref().unwrap())
+                .into_iter()
+                .filter_map(|result| result.ok());
+
+            let mut file_count = 0;
+            for _ in paths_iter {
+                file_count += 1;
+            }
+            println!("files found: {file_count}");
+
+            Ok(())
         }
         Command::Setup {
             origin,
@@ -62,10 +80,20 @@ fn main() {
             ..
         } => {
             if let (None, ..) | (.., None) = (origin, destination) {
-                eprintln!("ERROR: Origin and destination arguments must be informed!");
-                std::process::exit(1);
+                Err(CustomError::InvalidInput(
+                    "Origin and destination arguments must be informed!",
+                ))?;
             }
+
+            Ok(())
         }
-        Command::Entry { .. } => command.print_help(),
-    }
+        Command::Entry { .. } => {
+            command.print_help();
+            Ok(())
+        }
+    };
+
+    println!("Elapsed execution time: {:?}", now.elapsed());
+
+    result
 }

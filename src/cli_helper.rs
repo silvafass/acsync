@@ -327,7 +327,7 @@ macro_rules! create_args_parser {
                             }
                             value = option_value.map(String::from);
                         }
-                        if value.is_none() {
+                        if value.is_none() && field_type.contains("<bool>") {
                             value = Some(has_option.to_string());
                         }
                         if let Some(option_index) = option_index {
