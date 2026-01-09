@@ -21,13 +21,6 @@ create_args_parser! {
             /// Run command without sideeffect
             dryrun: Option<bool>,
         },
-        /// Replication setup
-        Setup {
-            /// Directory with original files
-            origin: Option<String>,
-            /// Destination directory to where files will be replicated
-            destination: Option<String>,
-        },
         @default Entry {},
     }
 }
@@ -71,19 +64,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 file_count += 1;
             }
             println!("files found: {file_count}");
-
-            Ok(())
-        }
-        Command::Setup {
-            origin,
-            destination,
-            ..
-        } => {
-            if let (None, ..) | (.., None) = (origin, destination) {
-                Err(CustomError::InvalidInput(
-                    "Origin and destination arguments must be informed!",
-                ))?;
-            }
 
             Ok(())
         }
