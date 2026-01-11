@@ -25,6 +25,42 @@ create_args_parser! {
     }
 }
 
+fn replicate<P: AsRef<std::path::Path>>(
+    source: P,
+    target: P,
+    dryrun: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = source.as_ref().to_path_buf();
+    let target = target.as_ref().to_path_buf();
+
+    let paths_iter = FileSearcher::new(&source)
+        .into_iter()
+        .filter_map(|result| result.ok());
+
+    let mut file_count = 0;
+    for source_path in paths_iter {
+        let relative_path = source_path.strip_prefix(&source)?;
+        let target_path = PathBuf::from(&target).join(relative_path);
+
+        if target_path.exists() {
+            println!("File already exists: {}", target_path.display());
+        } else if source_path.is_dir() {
+            println!("Creating directory {} ...", target_path.display());
+            if !dryrun {
+                std::fs::DirBuilder::new().create(&target_path)?;
+            }
+        } else {
+            println!("Copying file {} ...", relative_path.display());
+            if !dryrun {
+                std::fs::copy(&source_path, &target_path)?;
+            }
+        }
+        file_count += 1;
+    }
+    println!("files found: {file_count}");
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let now = Instant::now();
 
@@ -42,10 +78,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             dryrun,
             ..
         } => {
-            if back.unwrap_or_default() {
+            let back = back.unwrap_or_default();
+            let dryrun = dryrun.unwrap_or_default();
+
+            if back {
                 println!("Syncing back...");
             }
-            if dryrun.unwrap_or_default() {
+            if dryrun {
                 println!("Dry run mode...");
             }
 
@@ -53,29 +92,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let destination = destination
                 .as_ref()
                 .ok_or("Destination argument must be informed!")?;
-            let paths_iter = FileSearcher::new(origin)
-                .into_iter()
-                .filter_map(|result| result.ok());
 
-            let mut file_count = 0;
-            for origin_path in paths_iter {
-                let relative_path = origin_path.strip_prefix(origin)?;
-                let destination_path = PathBuf::from(destination).join(relative_path);
-
-                if destination_path.exists() {
-                    println!("File {} already exists", destination_path.display());
-                } else if origin_path.is_dir() {
-                    println!("Creating directory {} ...", destination_path.display());
-                    std::fs::DirBuilder::new().create(&destination_path)?;
-                } else {
-                    println!("Copying file {} ...", relative_path.display());
-                    std::fs::copy(&origin_path, &destination_path)?;
-                }
-                file_count += 1;
+            if back {
+                replicate(destination, origin, dryrun)
+            } else {
+                replicate(origin, destination, dryrun)
             }
-            println!("files found: {file_count}");
-
-            Ok(())
         }
         Command::Entry { .. } => {
             command.print_help();

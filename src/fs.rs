@@ -22,7 +22,7 @@ struct FileSearcherOptions {
 
 #[derive(Debug, Default)]
 pub struct FileSearcher {
-    start_path: PathBuf,
+    start_path: Option<PathBuf>,
     options: FileSearcherOptions,
 }
 
@@ -31,7 +31,7 @@ impl FileSearcher {
         let start_path = start_path.as_ref().to_path_buf();
         if start_path.is_file() || start_path.is_dir() {
             FileSearcher {
-                start_path,
+                start_path: Some(start_path),
                 options: FileSearcherOptions {
                     max_depth: usize::MAX,
                     ..FileSearcherOptions::default()
@@ -96,8 +96,15 @@ impl IntoIterator for FileSearcher {
     fn into_iter(self) -> Self::IntoIter {
         IntoIter {
             options: self.options,
-            offset_depth: self.start_path.components().count(),
-            pending_paths: VecDeque::from([InnerEntryPath::Path(self.start_path)]),
+            offset_depth: self
+                .start_path
+                .as_ref()
+                .map(|path| path.components().count())
+                .unwrap_or(0),
+            pending_paths: match self.start_path {
+                Some(path) => VecDeque::from([InnerEntryPath::Path(path)]),
+                None => VecDeque::new(),
+            },
             current_read_directory: None,
         }
     }
