@@ -127,8 +127,8 @@ fn replicate<P: AsRef<std::path::Path>>(
                         "File {} is dated in {:?} ({} KBs != {} KBs)",
                         target_path.display(),
                         source_modified_date.duration_since(target_modified_date)?,
-                        source_size / 1024,
-                        target_size / 1024
+                        (source_size / 1024) as f64,
+                        (target_size / 1024) as f64
                     );
                 }
                 if override_question {
@@ -141,7 +141,7 @@ fn replicate<P: AsRef<std::path::Path>>(
                             println!(
                                 "Copying file {} ({} KBs)...",
                                 relative_path.display(),
-                                source_size
+                                (source_size / 1024) as f64
                             );
                         }
                         if !dryrun {
@@ -155,7 +155,7 @@ fn replicate<P: AsRef<std::path::Path>>(
                 println!(
                     "File already exists: {} ({} KBs)",
                     target_path.display(),
-                    source_size
+                    (source_size / 1024) as f64
                 );
             }
         } else if source_path.is_file() {
@@ -163,7 +163,7 @@ fn replicate<P: AsRef<std::path::Path>>(
                 println!(
                     "Copying file {} ({} KBs)...",
                     relative_path.display(),
-                    source_size
+                    (source_size / 1024) as f64
                 );
             }
             if !dryrun {
@@ -179,18 +179,21 @@ fn replicate<P: AsRef<std::path::Path>>(
     println!("{:#^80}", " Stats ");
     println!(
         "Copied files: {file_copied_count} ({} KBs)",
-        total_file_copied_size / 1024
+        (total_file_copied_size / 1024) as f64
     );
     println!(
         "Dated files: {file_dated_count} ({} KBs)",
-        total_file_dated_size / 1024
+        (total_file_dated_size / 1024) as f64
     );
     println!(
         "Overrided files: {file_overrided_count} ({} KBs)",
-        total_file_overrided_size / 1024
+        (total_file_overrided_size / 1024) as f64
     );
     println!("Directory created: {directory_created_count}");
-    println!("Files found: {file_count} ({} KBs)", total_file_size / 1024);
+    println!(
+        "Files found: {file_count} ({} KBs)",
+        (total_file_size / 1024) as f64
+    );
     println!("{:#^80}\n", "");
 
     Ok(())
