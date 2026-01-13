@@ -64,10 +64,14 @@ fn replicate<P: AsRef<std::path::Path>>(
         .filter_map(|result| result.ok());
 
     let mut file_copied_count = 0;
+    let mut total_file_copied_size = 0;
     let mut file_dated_count = 0;
+    let mut total_file_dated_size = 0;
     let mut file_overrided_count = 0;
+    let mut total_file_overrided_size = 0;
     let mut directory_created_count = 0;
     let mut file_count = 0;
+    let mut total_file_size = 0;
 
     if source.is_dir() && !target.exists() {
         if debug {
@@ -87,7 +91,6 @@ fn replicate<P: AsRef<std::path::Path>>(
         let relative_path = source_path.strip_prefix(&source)?;
         let target_path = PathBuf::from(&target).join(relative_path);
         let source_size = source_path.metadata()?.size();
-        let target_size = target_path.metadata()?.size();
 
         let mut check_parent_directory = target_path.as_path();
         while let Some(parent) = check_parent_directory.parent()
@@ -115,13 +118,17 @@ fn replicate<P: AsRef<std::path::Path>>(
         if target_path.exists() {
             let source_modified_date = source_path.metadata()?.modified()?;
             let target_modified_date = target_path.metadata()?.modified()?;
+            let target_size = target_path.metadata()?.size();
             if source_modified_date > target_modified_date && source_size != target_size {
                 file_dated_count += 1;
+                total_file_dated_size += target_size;
                 if debug {
                     println!(
-                        "File {} is dated in {:?}",
+                        "File {} is dated in {:?} ({} KBs != {} KBs)",
                         target_path.display(),
-                        source_modified_date.duration_since(target_modified_date)?
+                        source_modified_date.duration_since(target_modified_date)?,
+                        source_size / 1024,
+                        target_size / 1024
                     );
                 }
                 if override_question {
@@ -131,35 +138,59 @@ fn replicate<P: AsRef<std::path::Path>>(
                     std::io::stdin().read_line(&mut input)?;
                     if input.starts_with("y") || input.starts_with("Y") {
                         if debug {
-                            println!("Copying file {} ...", relative_path.display());
+                            println!(
+                                "Copying file {} ({} KBs)...",
+                                relative_path.display(),
+                                source_size
+                            );
                         }
                         if !dryrun {
                             std::fs::copy(&source_path, &target_path)?;
                             file_overrided_count += 1;
+                            total_file_overrided_size += source_size;
                         }
                     }
                 }
             } else if debug {
-                println!("File already exists: {}", target_path.display());
+                println!(
+                    "File already exists: {} ({} KBs)",
+                    target_path.display(),
+                    source_size
+                );
             }
         } else if source_path.is_file() {
             if debug {
-                println!("Copying file {} ...", relative_path.display());
+                println!(
+                    "Copying file {} ({} KBs)...",
+                    relative_path.display(),
+                    source_size
+                );
             }
             if !dryrun {
                 std::fs::copy(&source_path, &target_path)?;
                 file_copied_count += 1;
+                total_file_copied_size += source_size;
             }
         }
         file_count += 1;
+        total_file_size += source_size;
     }
 
     println!("{:#^80}", " Stats ");
-    println!("Copied files: {file_copied_count}");
-    println!("Dated files: {file_dated_count}");
-    println!("Overrided files: {file_overrided_count}");
+    println!(
+        "Copied files: {file_copied_count} ({} KBs)",
+        total_file_copied_size / 1024
+    );
+    println!(
+        "Dated files: {file_dated_count} ({} KBs)",
+        total_file_dated_size / 1024
+    );
+    println!(
+        "Overrided files: {file_overrided_count} ({} KBs)",
+        total_file_overrided_size / 1024
+    );
     println!("Directory created: {directory_created_count}");
-    println!("Files found: {file_count}");
+    println!("Files found: {file_count} ({} KBs)", total_file_size / 1024);
     println!("{:#^80}\n", "");
 
     Ok(())
