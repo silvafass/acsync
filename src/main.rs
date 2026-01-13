@@ -3,6 +3,7 @@ use acsync::{
     cli_helper::{self, Arg, ArgsParser},
     create_args_parser,
 };
+use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -85,6 +86,8 @@ fn replicate<P: AsRef<std::path::Path>>(
     for source_path in paths_iter {
         let relative_path = source_path.strip_prefix(&source)?;
         let target_path = PathBuf::from(&target).join(relative_path);
+        let source_size = source_path.metadata()?.size();
+        let target_size = target_path.metadata()?.size();
 
         let mut check_parent_directory = target_path.as_path();
         while let Some(parent) = check_parent_directory.parent()
@@ -112,7 +115,7 @@ fn replicate<P: AsRef<std::path::Path>>(
         if target_path.exists() {
             let source_modified_date = source_path.metadata()?.modified()?;
             let target_modified_date = target_path.metadata()?.modified()?;
-            if source_modified_date > target_modified_date {
+            if source_modified_date > target_modified_date && source_size != target_size {
                 file_dated_count += 1;
                 if debug {
                     println!(
