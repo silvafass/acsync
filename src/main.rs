@@ -16,7 +16,9 @@ create_args_parser! {
             origin: Arg<String>,
             /// Destination directory to where files will be replicated
             destination: Arg<String>,
-            /// Restore/restored back from destination directory to original director
+            /// Question to user if desire override dated files
+            override_question: Option<bool>,
+            /// Restore back from destination directory to original director
             back: Option<bool>,
             /// Run command without sideeffect
             dryrun: Option<bool>,
@@ -28,13 +30,35 @@ create_args_parser! {
 fn replicate<P: AsRef<std::path::Path>>(
     source: P,
     target: P,
+    override_question: bool,
     dryrun: bool,
     debug: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let source = source.as_ref().to_path_buf();
     let target = target.as_ref().to_path_buf();
 
+    let includes: Vec<String> =
+        if let Ok(includes) = std::fs::read_to_string(source.join(".acsync_includes")) {
+            includes
+                .split_terminator('\n')
+                .map(|item| item.to_string())
+                .collect()
+        } else {
+            vec![]
+        };
+    let excludes: Vec<String> =
+        if let Ok(excludes) = std::fs::read_to_string(source.join(".acsync_excludes")) {
+            excludes
+                .split_terminator('\n')
+                .map(|item| item.to_string())
+                .collect()
+        } else {
+            vec![]
+        };
+
     let paths_iter = FileSearcher::new(&source)
+        .includes(&includes)
+        .excludes(&excludes)
         .into_iter()
         .filter_map(|result| result.ok());
 
@@ -44,51 +68,78 @@ fn replicate<P: AsRef<std::path::Path>>(
     let mut directory_created_count = 0;
     let mut file_count = 0;
 
+    if source.is_dir() && !target.exists() {
+        if debug {
+            println!("Creating target directory {} ...", target.display());
+        }
+        if !dryrun {
+            let source_metadata = source.metadata()?;
+
+            std::fs::DirBuilder::new().create(&target)?;
+            directory_created_count += 1;
+
+            std::fs::set_permissions(&target, source_metadata.permissions())?;
+        }
+    }
+
     for source_path in paths_iter {
         let relative_path = source_path.strip_prefix(&source)?;
         let target_path = PathBuf::from(&target).join(relative_path);
 
+        let mut check_parent_directory = target_path.as_path();
+        while let Some(parent) = check_parent_directory.parent()
+            && !parent.exists()
+        {
+            check_parent_directory = parent;
+            let check_relative_path_directory = parent.strip_prefix(&target)?;
+            let check_source_path_directory =
+                PathBuf::from(&source).join(check_relative_path_directory);
+            if check_source_path_directory.is_dir() {
+                if debug {
+                    println!("Creating directory {} ...", parent.display());
+                }
+                if !dryrun {
+                    let source_metadata = check_source_path_directory.metadata()?;
+
+                    std::fs::DirBuilder::new().create(&parent)?;
+                    directory_created_count += 1;
+
+                    std::fs::set_permissions(&parent, source_metadata.permissions())?;
+                }
+            }
+        }
+
         if target_path.exists() {
-            let source_metadata = source_path.metadata()?;
-            let target_metadata = target_path.metadata()?;
-
-            if source_metadata.modified()? > target_metadata.modified()? {
+            let source_modified_date = source_path.metadata()?.modified()?;
+            let target_modified_date = target_path.metadata()?.modified()?;
+            if source_modified_date > target_modified_date {
                 file_dated_count += 1;
-                println!(
-                    "\nFile {} is newer than\
-                    \nfile {},\
-                    \nDo you want to override the file content? (Y/N) ",
-                    source_path.display(),
-                    target_path.display()
-                );
+                if debug {
+                    println!(
+                        "File {} is dated in {:?}",
+                        target_path.display(),
+                        source_modified_date.duration_since(target_modified_date)?
+                    );
+                }
+                if override_question {
+                    println!("Do you want to override the file content? (Y/N) ");
 
-                let mut input = String::new();
-                std::io::stdin().read_line(&mut input)?;
-                if input.starts_with("y") || input.starts_with("Y") {
-                    if debug {
-                        println!("Copying file {} ...", relative_path.display());
-                    }
-                    if !dryrun {
-                        std::fs::copy(&source_path, &target_path)?;
-                        file_overrided_count += 1;
+                    let mut input = String::new();
+                    std::io::stdin().read_line(&mut input)?;
+                    if input.starts_with("y") || input.starts_with("Y") {
+                        if debug {
+                            println!("Copying file {} ...", relative_path.display());
+                        }
+                        if !dryrun {
+                            std::fs::copy(&source_path, &target_path)?;
+                            file_overrided_count += 1;
+                        }
                     }
                 }
             } else if debug {
                 println!("File already exists: {}", target_path.display());
             }
-        } else if source_path.is_dir() {
-            if debug {
-                println!("Creating directory {} ...", target_path.display());
-            }
-            if !dryrun {
-                let source_metadata = source_path.metadata()?;
-
-                std::fs::DirBuilder::new().create(&target_path)?;
-                directory_created_count += 1;
-
-                std::fs::set_permissions(&target_path, source_metadata.permissions())?;
-            }
-        } else {
+        } else if source_path.is_file() {
             if debug {
                 println!("Copying file {} ...", relative_path.display());
             }
@@ -100,12 +151,13 @@ fn replicate<P: AsRef<std::path::Path>>(
         file_count += 1;
     }
 
-    println!("\n");
-    println!("files copied: {file_copied_count}");
-    println!("files dated: {file_dated_count}");
-    println!("files overrided: {file_overrided_count}");
-    println!("directory created: {directory_created_count}");
-    println!("files found: {file_count}");
+    println!("{:#^80}", " Stats ");
+    println!("Copied files: {file_copied_count}");
+    println!("Dated files: {file_dated_count}");
+    println!("Overrided files: {file_overrided_count}");
+    println!("Directory created: {directory_created_count}");
+    println!("Files found: {file_count}");
+    println!("{:#^80}\n", "");
 
     Ok(())
 }
@@ -119,10 +171,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Command::Replicate {
             origin,
             destination,
+            override_question,
             back,
             dryrun,
             debug,
         } => {
+            let override_question = override_question.unwrap_or_default();
             let back = back.unwrap_or_default();
             let dryrun = dryrun.unwrap_or_default();
             let debug = debug.unwrap_or_default();
@@ -140,9 +194,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("Destination argument must be informed!")?;
 
             if back {
-                replicate(destination, origin, dryrun, debug)
+                replicate(destination, origin, override_question, dryrun, debug)
             } else {
-                replicate(origin, destination, dryrun, debug)
+                replicate(origin, destination, override_question, dryrun, debug)
             }
         }
         Command::Entry { .. } => {
