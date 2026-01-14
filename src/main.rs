@@ -40,6 +40,7 @@ fn replicate<P: AsRef<std::path::Path>>(
 
     let includes: Vec<String> =
         if let Ok(includes) = std::fs::read_to_string(source.join(".acsync_includes")) {
+            println!("Found file .acsync_includes, loading...");
             includes
                 .split_terminator('\n')
                 .map(|item| item.to_string())
@@ -49,6 +50,7 @@ fn replicate<P: AsRef<std::path::Path>>(
         };
     let excludes: Vec<String> =
         if let Ok(excludes) = std::fs::read_to_string(source.join(".acsync_excludes")) {
+            println!("Found file .acsync_excludes, loading...");
             excludes
                 .split_terminator('\n')
                 .map(|item| item.to_string())
@@ -81,10 +83,10 @@ fn replicate<P: AsRef<std::path::Path>>(
             let source_metadata = source.metadata()?;
 
             std::fs::DirBuilder::new().create(&target)?;
-            directory_created_count += 1;
 
             std::fs::set_permissions(&target, source_metadata.permissions())?;
         }
+        directory_created_count += 1;
     }
 
     for source_path in paths_iter {
@@ -108,10 +110,10 @@ fn replicate<P: AsRef<std::path::Path>>(
                     let source_metadata = check_source_path_directory.metadata()?;
 
                     std::fs::DirBuilder::new().create(&parent)?;
-                    directory_created_count += 1;
 
                     std::fs::set_permissions(&parent, source_metadata.permissions())?;
                 }
+                directory_created_count += 1;
             }
         }
 
@@ -132,6 +134,15 @@ fn replicate<P: AsRef<std::path::Path>>(
                     );
                 }
                 if override_question {
+                    if !debug {
+                        println!(
+                            "File {} is dated in {:?} ({} KBs != {} KBs)",
+                            target_path.display(),
+                            source_modified_date.duration_since(target_modified_date)?,
+                            (source_size / 1024) as f64,
+                            (target_size / 1024) as f64
+                        );
+                    }
                     println!("Do you want to override the file content? (Y/N) ");
 
                     let mut input = String::new();
@@ -146,17 +157,19 @@ fn replicate<P: AsRef<std::path::Path>>(
                         }
                         if !dryrun {
                             std::fs::copy(&source_path, &target_path)?;
-                            file_overrided_count += 1;
-                            total_file_overrided_size += source_size;
                         }
+                        file_overrided_count += 1;
+                        total_file_overrided_size += source_size;
                     }
                 }
-            } else if debug {
-                println!(
-                    "File already exists: {} ({} KBs)",
-                    target_path.display(),
-                    (source_size / 1024) as f64
-                );
+            } else {
+                if debug {
+                    println!(
+                        "File already exists: {} ({} KBs)",
+                        target_path.display(),
+                        (source_size / 1024) as f64
+                    );
+                }
             }
         } else if source_path.is_file() {
             if debug {
@@ -168,9 +181,9 @@ fn replicate<P: AsRef<std::path::Path>>(
             }
             if !dryrun {
                 std::fs::copy(&source_path, &target_path)?;
-                file_copied_count += 1;
-                total_file_copied_size += source_size;
             }
+            file_copied_count += 1;
+            total_file_copied_size += source_size;
         }
         file_count += 1;
         total_file_size += source_size;
