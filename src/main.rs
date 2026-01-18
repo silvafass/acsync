@@ -117,7 +117,7 @@ fn replicate<P: AsRef<std::path::Path>>(
             }
         }
 
-        if target_path.exists() {
+        if target_path.exists() && target_path.is_file() && source_path.is_file() {
             let source_modified_date = source_path.metadata()?.modified()?;
             let target_modified_date = target_path.metadata()?.modified()?;
             let target_size = target_path.metadata()?.size();
@@ -162,14 +162,6 @@ fn replicate<P: AsRef<std::path::Path>>(
                         total_file_overrided_size += source_size;
                     }
                 }
-            } else {
-                if debug {
-                    println!(
-                        "File already exists: {} ({} KBs)",
-                        target_path.display(),
-                        (source_size / 1024) as f64
-                    );
-                }
             }
         } else if source_path.is_file() {
             if debug {
@@ -185,8 +177,10 @@ fn replicate<P: AsRef<std::path::Path>>(
             file_copied_count += 1;
             total_file_copied_size += source_size;
         }
-        file_count += 1;
-        total_file_size += source_size;
+        if source_path.is_file() {
+            file_count += 1;
+            total_file_size += source_size;
+        }
     }
 
     println!("{:#^80}", " Stats ");
