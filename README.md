@@ -1,20 +1,120 @@
-# Simple File Synchronizer Tool
+# ACSync - Another Convenient File Synchronizer
 
-This is a project with the practical purpose of learning the Rust language, as well as implementing a solution to use as a backup tool for my local files.
+`acsync` is a lighweight, simple command-line file synchronizer tool. It was created as a learning project and as a pratical backup tool for my local files.
 
-## Expected features
+---
 
-* This should be minimally functional for file backup and restoration.
-* This should be able to copy and sync files recursively between the source and destination directories.
-* This should preserve the original file's metadata as much as possible.
-* This should provide some level os file integritetino validation based in file metadata and/or checksum generation.
-* this should never delete or overwrite a file without a prior safeguard as a guarantee of restoration.
+## Table of Contents
 
-## Requirements for learning purposes
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Examples](#examples)
+- [Testing](#testing)
+- [License](#license)
+- [Contribution](#contribution)
 
-* For initial implementation, it should preferably not use any third-party dependencies.
-    * Let's try using only the Rust standard library.
-    * The use of any third-party dependencies must be justified and documented.
+---
+
+## Features
+
+| Feature | Status |
+|---------|--------|
+| Recursively copy directories | ✅ |
+| Preserve file permissions | ✅ |
+| Skip files based on *include* / *exclude* patterns | ✅ |
+| Dry‑run mode (no changes are written) | ✅ |
+| Override‑prompt for dated files | ✅ |
+| Statistics report after sync | ✅ |
+| Minimal dependencies (only stdlib) | ✅ |
+
+---
+
+## Installation
+
+`acsync` uses Cargo, so you need a recent Rust toolchain installed.
+
+```bash
+cargo install --git https://github.com/silvafass/acsync
+```
+
+---
+
+## Usage
+
+```bash
+Copy files from a origin to a destination directory
+
+Usage: acsync replicate [OPTIONS] [ARGS]...
+
+Arguments:
+        origin               Directory with original files
+        destination          Destination directory to where files will be replicated
+
+Options:
+        --override_question  Question to user if desire override dated files
+        --back               Restore back from destination directory to original director
+        --dryrun             Run command without sideeffect
+        --debug              Enable debug mode
+```
+
+### Examples
+
+#### 1. Simple copy
+
+```bash
+acsync replicate /home/user/Documents /media/backup/Documents
+```
+
+#### 2. Dry‑run with debug output
+
+```bash
+acsync replicate /home/user/Documents /media/backup/Documents --dryrun --debug
+```
+
+The program will walk the tree, print each file it *would* copy, and give a summary – but **no files are written**.
+
+#### 3. Override prompt for dated files
+
+```bash
+acsync replicate /home/user/Documents /media/backup/Documents --override_question
+```
+
+During the run, when a file in the destination is older than the source, `acsync` will present information about how much dated the file is and ask for confirmation if you really want to override.
+
+#### 4. Restore from backup
+
+```bash
+acsync replicate /media/backup/Documents /home/user/Documents --back
+```
+
+The same logic runs but source and destination are swapped.
+
+#### 5. Using include/exclude lists
+
+Create `.acsync_includes` in `/home/user/Documents`:
+
+```
+src/
+README.md
+```
+
+Create `.acsync_excludes`:
+
+```
+target
+.tmp
+```
+
+Now run:
+
+```bash
+acsync replicate /home/user/Documents /media/backup/Documents
+```
+
+Only files in `src/` and the `README.md` will be copied; the `target/` directory and any `.tmp` files will be skipped.
+
+---
 
 ## License
 
